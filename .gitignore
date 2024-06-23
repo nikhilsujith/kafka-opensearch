@@ -5,6 +5,7 @@ target/
 
 # Kafka creds
 creds/client.properties
+kafka-creds/client.properties
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
