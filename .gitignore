@@ -4,8 +4,7 @@ target/
 !**/src/test/**/target/
 
 # Kafka creds
-creds/client.properties
-kafka-creds/client.properties
+/client.properties
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
