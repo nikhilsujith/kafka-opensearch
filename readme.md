@@ -9,12 +9,12 @@ Kafka consumer then consumes data off the kafka topic and publishes to OpenSearc
 ## Setup
 <ul>
   <li>
-    Clone blank.creds.client.properties as client.properties
+    Rename blank.client.properties as client.properties
   </li>
   <li>
     Replace bootstrap.servers with Kafka cluster URL (Confluent cloud was used for this project, but any should work as long as connection params are correct)
   </li>
   <li>
-    Replace USERNAME and PASSWORD in sasl.jaas.config
+    Replace USERNAME and PASSWORD in client.properties with kafka cluster username and password
   </li>
 </ul>
