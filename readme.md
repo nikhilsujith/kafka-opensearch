@@ -1,8 +1,10 @@
 # Kafka Open Search
 
 ## What?
-Kafka project which reads data off the wikimedia changes stream "https://stream.wikimedia.org/v2/stream/recentchange" and publishes into a kafka topic. The stream can be any data.
-Kafka consumer then consumes data off the kafka topic and publishes to OpenSearch (Open Source version of Elastic Search)
+Kafka project with a producer and consumer module.
+
+Producer listens to server sent events from wikimedia changes stream "https://stream.wikimedia.org/v2/stream/recentchange" and publishes into a kafka topic.
+Kafka consumer then consumes data off the kafka topic and publishes to OpenSearch (Open Source version of Elastic Search) which can later be used for data analysis.
 
 ## Setup
 <ul>
