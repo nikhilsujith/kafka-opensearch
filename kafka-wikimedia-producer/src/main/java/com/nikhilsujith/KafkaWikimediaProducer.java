@@ -27,6 +27,11 @@ public class KafkaWikimediaProducer {
         props.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
+        //        High Throuhput Producer Configs
+        props.setProperty(ProducerConfig.LINGER_MS_CONFIG, "20");
+        props.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, Integer.toString(32 * 1024));
+        props.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy");
+
 //        Call Event Handler
         KafkaProducer<String, String> kafkaWikiProducer = new KafkaProducer<>(props);
         EventHandler eventHandler = new WikimediaChangeHandler(topic, kafkaWikiProducer);
