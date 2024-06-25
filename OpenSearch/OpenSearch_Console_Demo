@@ -1,0 +1,14 @@
+#Create New Index
+PUT /my-first-index
+
+#Insert a new document
+PUT /my-first-index/_doc/1
+{"Description": "Random description under myfirstindex -> _doc -> 1"}
+PUT /my-first-index/_doc/2
+{"Description": "Random description2 under myfirstindex -> _doc -> 2"}
+
+#GET a document
+GET /my-first-index/_doc/2
+
+#DELETE a document
+DELETE /my-first-index/_doc/1

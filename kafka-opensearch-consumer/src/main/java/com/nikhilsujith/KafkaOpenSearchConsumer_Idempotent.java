@@ -1,12 +1,14 @@
 /****
  *
- * Basic consumer implementation; Fails on error
+ * Idempotent Consumer Impl
  *
- * Does not care about delivery semantics
+ * Checks for duplicate message (based on ID from data) before sending to opensearch.
+ *
  * */
 
 package com.nikhilsujith;
 
+import com.google.gson.JsonParser;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -27,7 +29,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Properties;
 
-public class KafkaOpensearchConsumer {
+public class KafkaOpenSearchConsumer_Idempotent {
 
     private static Logger log = LoggerFactory.getLogger(KafkaOpensearchConsumer.class.getName());
     Properties properties;
@@ -35,7 +37,7 @@ public class KafkaOpensearchConsumer {
     private String consumerGroup;
     private RestHighLevelClient openSearchClient = OpenSearchClient.createOpenSearchClient();
 
-    KafkaOpensearchConsumer(String topic, String consumerGroup) throws IOException {
+    KafkaOpenSearchConsumer_Idempotent(String topic, String consumerGroup) throws IOException {
         log.info("Loading client properties");
         properties = KafkaConfigUtil.getKafkaClientProps("creds/client.properties");
         properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
@@ -52,7 +54,7 @@ public class KafkaOpensearchConsumer {
 //        Check if index already exists
         boolean indexExists = openSearchClient
                 .indices()
-                        .exists(new GetIndexRequest("wikimedia"), RequestOptions.DEFAULT);
+                .exists(new GetIndexRequest("wikimedia"), RequestOptions.DEFAULT);
 
 //        If index does not exists, create a new one
         if (! indexExists){
@@ -63,6 +65,24 @@ public class KafkaOpensearchConsumer {
         } else {
             log.info("Wikimedia index already exists");
         }
+    }
+
+    private String getMessageId(String json){
+        return JsonParser.parseString(json)
+                .getAsJsonObject()
+                    .get("meta")
+                .getAsJsonObject()
+                    .get("id")
+                .getAsString();
+    }
+    private void insertDataOpenSearch(ConsumerRecord consumerRecord) throws IOException {
+
+        String kafkaMessageId = getMessageId(consumerRecord.value().toString());
+        IndexRequest indexRequest = new IndexRequest("wikimedia")
+                .source(consumerRecord.value(), XContentType.JSON)
+                .id(kafkaMessageId);
+        IndexResponse indexResponse = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
+        log.info("Inserted doc into OpenSearch with ID: " + indexResponse.getId());
     }
 
     private void startConsumer(){
@@ -88,30 +108,34 @@ public class KafkaOpensearchConsumer {
         });
 
         try{
+
+//            Subscribe to a topic
             kafkaConsumer.subscribe(Arrays.asList(topic));
+
+//            Poll a topic
             while (true){
                 ConsumerRecords<String, String> consumerRecords = kafkaConsumer.poll(1000);
-                log.info("Received " + consumerRecords.count() + " records from kafka");
 
-                for (ConsumerRecord<String, String> record: consumerRecords){
-                    log.info("key: " + record.key() +
-                            "\tValue: " + record.value() +
-                            "\tTopic: " + record.topic() +
-                            "\tOffset: " + record.offset()
-                    );
+                if (consumerRecords.count() > 0){
+                    log.info("Received " + consumerRecords.count() + " from Kafka");
+                    for (ConsumerRecord<String, String> record: consumerRecords){
+                        log.info("key: " + record.key() +
+                                "\tValue: " + record.value() +
+                                "\tTopic: " + record.topic() +
+                                "\tOffset: " + record.offset()
+                        );
 
 //                    Send data into opensearch
 //                    Create an index request
-                    if (consumerRecords.count() > 0){
-                        try{
-                            IndexRequest indexRequest = new IndexRequest("wikimedia")
-                                    .source(record.value(), XContentType.JSON);
-                            IndexResponse indexResponse = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
-                            log.info("Inserted doc into OpenSearch with id: " + indexResponse.getId());
+                        try {
+                            insertDataOpenSearch(record);
                         } catch (Exception e){
-                            log.error("Unable to insert doc into opensearch", e);
+                            log.warn("Unable to insert record into openSearch: ");
+                            e.printStackTrace();
                         }
                     }
+                }else{
+                    log.info("Waiting for new records from Kafka");
                 }
             }
         } catch (WakeupException we){
@@ -126,8 +150,8 @@ public class KafkaOpensearchConsumer {
 
     public static void main(String[] args) throws IOException {
         String topic = "wikimedia.recentchange";
-        String cg = "consumer-group1";
-        KafkaOpensearchConsumer kosc = new KafkaOpensearchConsumer(topic, cg);
+        String cg = "consumer-group-3";
+        KafkaOpenSearchConsumer_Idempotent kosc = new KafkaOpenSearchConsumer_Idempotent(topic, cg);
         kosc.createOpenSearchIndex();
         kosc.startConsumer();
     }

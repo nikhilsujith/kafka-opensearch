@@ -46,7 +46,7 @@ public class WikimediaChangeHandler implements EventHandler {
                 new ProducerRecord<>(topic, messageEvent.getData()),
                 (recordMetadata, e) -> {
                     delayCounter++;
-                    if (delayCounter == 2){
+                    if (delayCounter == 20){
                         try {
                             log.info("Sleeping for 5 seconds");
                             Thread.sleep(5000);
