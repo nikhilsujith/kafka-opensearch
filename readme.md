@@ -7,6 +7,7 @@ Producer listens to server sent events from wikimedia changes stream "https://st
 Kafka consumer then consumes data off the kafka topic and publishes to OpenSearch (Open Source version of Elastic Search) which can later be used for data analysis.
 
 ## Setup
+### Kafka Configs
 <ul>
   <li>
     Rename blank.client.properties as client.properties
@@ -17,4 +18,9 @@ Kafka consumer then consumes data off the kafka topic and publishes to OpenSearc
   <li>
     Replace USERNAME and PASSWORD in client.properties with kafka cluster username and password
   </li>
+</ul>
+
+### OpenSearch
+<ul>
+  <li>This project uses a local docker delployed single node OpenSearch. You can choose a managed solution if required</li>
 </ul>
