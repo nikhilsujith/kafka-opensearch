@@ -1,8 +1,8 @@
 /****
  *
- * Idempotent Consumer Impl
+ * Manually commit offsets after batch has processed
  *
- * Checks for duplicate message (based on ID from data) before sending to opensearch.
+ *
  *
  * */
 
@@ -15,6 +15,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.RequestOptions;
@@ -29,7 +31,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Properties;
 
-public class KafkaOpenSearchConsumer_Idempotent {
+public class KafkaOpenSearchConsumer_Idempotent_ManualCommit {
 
     private static Logger log = LoggerFactory.getLogger(KafkaOpensearchConsumer.class.getName());
     Properties properties;
@@ -37,15 +39,17 @@ public class KafkaOpenSearchConsumer_Idempotent {
     private String consumerGroup;
     private RestHighLevelClient openSearchClient = OpenSearchClient.createOpenSearchClient();
 
-    KafkaOpenSearchConsumer_Idempotent(String topic, String consumerGroup) throws IOException {
+    KafkaOpenSearchConsumer_Idempotent_ManualCommit(String topic, String consumerGroup) throws IOException {
         log.info("Loading client properties");
         properties = KafkaConfigUtil.getKafkaClientProps("creds/client.properties");
         properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, consumerGroup);
         properties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,"earliest");
+        properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         this.topic = topic;
         this.consumerGroup = consumerGroup;
+
     }
 
     private void createOpenSearchIndex() throws IOException {
@@ -76,14 +80,16 @@ public class KafkaOpenSearchConsumer_Idempotent {
                 .getAsString();
     }
 
-    private void insertDataOpenSearch(ConsumerRecord consumerRecord) throws IOException {
+    private BulkRequest insertDataOpenSearch(ConsumerRecord consumerRecord, BulkRequest bulkRequest) throws IOException {
 
         String kafkaMessageId = getMessageId(consumerRecord.value().toString());
         IndexRequest indexRequest = new IndexRequest("wikimedia")
                 .source(consumerRecord.value(), XContentType.JSON)
                 .id(kafkaMessageId);
-        IndexResponse indexResponse = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
-        log.info("Inserted doc into OpenSearch with ID: " + indexResponse.getId());
+//        IndexResponse indexResponse = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
+        BulkRequest br = bulkRequest.add(indexRequest);
+        return br;
+
     }
 
     private void startConsumer(){
@@ -113,9 +119,10 @@ public class KafkaOpenSearchConsumer_Idempotent {
 //            Poll a topic
             while (true){
                 ConsumerRecords<String, String> consumerRecords = kafkaConsumer.poll(1000);
-
+                BulkRequest bulkRequest = new BulkRequest();
                 if (consumerRecords.count() > 0){
                     log.info("Received " + consumerRecords.count() + " from Kafka");
+
                     for (ConsumerRecord<String, String> record: consumerRecords){
                         log.info("key: " + record.key() +
                                 "\tValue: " + record.value() +
@@ -126,12 +133,32 @@ public class KafkaOpenSearchConsumer_Idempotent {
 //                    Send data into opensearch
 //                    Create an index request
                         try {
-                            insertDataOpenSearch(record);
+//                            bulkRequest = insertDataOpenSearch(record, bulkRequest);
+                            String kafkaMessageId = getMessageId(record.value().toString());
+                            IndexRequest indexRequest = new IndexRequest("wikimedia")
+                                    .source(record.value(), XContentType.JSON)
+                                    .id(kafkaMessageId);
+                            bulkRequest.add(indexRequest);
+
                         } catch (Exception e){
                             log.warn("Unable to insert record into openSearch: ");
                             e.printStackTrace();
                         }
                     }
+
+                    BulkResponse bulkResponse = openSearchClient.bulk(bulkRequest, RequestOptions.DEFAULT);
+                    log.info("Inserted " + bulkResponse.getItems().length + " record(s).");
+
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
+                    // commit offsets after the batch is consumed
+                    kafkaConsumer.commitSync();
+                    log.info("Offsets have been committed!");
+
                 }else{
                     log.info("Waiting for new records from Kafka");
                 }
@@ -149,7 +176,7 @@ public class KafkaOpenSearchConsumer_Idempotent {
     public static void main(String[] args) throws IOException {
         String topic = "wikimedia.recentchange";
         String cg = "consumer-group-3";
-        KafkaOpenSearchConsumer_Idempotent kosc = new KafkaOpenSearchConsumer_Idempotent(topic, cg);
+        KafkaOpenSearchConsumer_Idempotent_ManualCommit kosc = new KafkaOpenSearchConsumer_Idempotent_ManualCommit(topic, cg);
         kosc.createOpenSearchIndex();
         kosc.startConsumer();
     }

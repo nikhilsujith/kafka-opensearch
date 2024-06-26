@@ -67,9 +67,7 @@ public class KafkaOpensearchConsumer {
 
     private void startConsumer(){
         KafkaConsumer<String, String> kafkaConsumer = new KafkaConsumer<>(properties);
-//        Get Current Thread
         final Thread currentThread = Thread.currentThread();
-
         /***
          * Shutdown hook listens for interrupts
          *
@@ -87,7 +85,7 @@ public class KafkaOpensearchConsumer {
             }
         });
 
-        try{
+        try {
             kafkaConsumer.subscribe(Arrays.asList(topic));
             while (true){
                 ConsumerRecords<String, String> consumerRecords = kafkaConsumer.poll(1000);

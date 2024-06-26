@@ -18,28 +18,41 @@ public class KafkaWikimediaProducer {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaWikimediaProducer.class.getSimpleName());
     private static Properties props;
+    private static String topic;
+    private static String streamSourceUrl;
 
-    public static void main(String[] args) throws InterruptedException, IOException {
-        props = KafkaConfigUtil.getKafkaClientProps("creds/client.properties");
-        String topic = "wikimedia.recentchange";
-        String wikiDataSourceUrl = "https://stream.wikimedia.org/v2/stream/recentchange";
-
+    KafkaWikimediaProducer(String topic, String streamSourceUrl) throws IOException {
+       this.topic = topic;
+       this.streamSourceUrl = streamSourceUrl;
+       props = KafkaConfigUtil.getKafkaClientProps("creds/client.properties");
         props.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        //        High Throuhput Producer Configs
+        //  High Throuhput Producer Configs
         props.setProperty(ProducerConfig.LINGER_MS_CONFIG, "20");
         props.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, Integer.toString(32 * 1024));
         props.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy");
+    }
 
-//        Call Event Handler
+    private void produceMessages(){
+        //        Call Event Handler
         KafkaProducer<String, String> kafkaWikiProducer = new KafkaProducer<>(props);
         EventHandler eventHandler = new WikimediaChangeHandler(topic, kafkaWikiProducer);
-        EventSource.Builder builder = new EventSource.Builder(eventHandler, URI.create(wikiDataSourceUrl));
+        EventSource.Builder builder = new EventSource.Builder(eventHandler, URI.create(streamSourceUrl));
         EventSource eventSource = builder.build();
-
 //        Start producer in another thread
         eventSource.start();
+    }
+
+
+
+    public static void main(String[] args) throws InterruptedException, IOException {
+
+        String topic = "wikimedia.recentchange";
+        String wikiDataSourceUrl = "https://stream.wikimedia.org/v2/stream/recentchange";
+
+        KafkaWikimediaProducer kafkaWikimediaProducer = new KafkaWikimediaProducer(topic, wikiDataSourceUrl);
+        kafkaWikimediaProducer.produceMessages();
 
 //        Block main thread for 10 minutes; If not program will produce for ever?
         TimeUnit.MINUTES.sleep(10);
